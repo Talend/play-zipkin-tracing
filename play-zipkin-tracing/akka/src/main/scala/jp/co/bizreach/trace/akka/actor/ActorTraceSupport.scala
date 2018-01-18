@@ -5,6 +5,7 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import brave.Span
+import brave.propagation.Propagation
 import jp.co.bizreach.trace.ZipkinTraceServiceLike
 
 import scala.concurrent.Future
@@ -13,26 +14,26 @@ import scala.util.{Failure, Success, Try}
 object ActorTraceSupport {
 
   /**
-   * Mix-in this trait to message class for traced actor.
-   * Typically, traceData property would be declared as `implicit val` as follows:
-   *
-   * {{{
-   * case class HelloActorMessage(message: String)(implicit val traceData: ActorTraceData)
-   *   extends TraceMessage
-   * }}}
-   */
+    * Mix-in this trait to message class for traced actor.
+    * Typically, traceData property would be declared as `implicit val` as follows:
+    *
+    * {{{
+    * case class HelloActorMessage(message: String)(implicit val traceData: ActorTraceData)
+    *   extends TraceMessage
+    * }}}
+    */
   trait TraceMessage {
     val traceData: ActorTraceData
   }
 
   /**
-   * Mix-in this trait to message class instead of [[TraceMessage]] if the target actor is a remote actor.
-   *
-   * {{{
-   * case class HelloActorMessage(message: String)(implicit val traceData: RemoteActorTraceData)
-   *   extends RemoteTraceMessage
-   * }}}
-   */
+    * Mix-in this trait to message class instead of [[TraceMessage]] if the target actor is a remote actor.
+    *
+    * {{{
+    * case class HelloActorMessage(message: String)(implicit val traceData: RemoteActorTraceData)
+    *   extends RemoteTraceMessage
+    * }}}
+    */
   trait RemoteTraceMessage {
     val traceData: RemoteActorTraceData
   }
@@ -57,39 +58,40 @@ object ActorTraceSupport {
 
   private def toRemoteSpan(span: Span, tracer: ZipkinTraceServiceLike): RemoteSpan = {
     val data = new RemoteSpan()
-    tracer.tracing.propagation().injector(
-      (carrier: RemoteSpan, key: String, value: String) => carrier.put(key, value)
-    ).inject(span.context(), data)
+    tracer.tracing.propagation().injector(new Propagation.Setter[RemoteSpan, String] {
+      def put(carrier: RemoteSpan, key: String, value: String): Unit = carrier.put(key, value)
+    }).inject(span.context(), data)
     data
   }
 
   private def fromRemoteSpan(data: RemoteSpan, tracer: ZipkinTraceServiceLike): Span = {
-    val contextOrFlags = tracer.tracing.propagation().extractor(
-      (carrier: RemoteSpan, key: String) => carrier.get(key)
-    ).extract(data)
+    val contextOrFlags = tracer.tracing.propagation().extractor(new Propagation.Getter[RemoteSpan, String] {
+      def get(carrier: RemoteSpan, key: String): String = carrier.get(key)
+    }).extract(data)
     tracer.tracing.tracer.joinSpan(contextOrFlags.context())
   }
 
   /**
-   * Traceable actor have to extend this trait.
-   *
-   * {{{
-   * class HelloActor @Inject()(val tracer: ZipkinTraceServiceLike) extends TraceableActor {
-   *   def receive = {
-   *     case m: HelloActorMessage => {
-   *       println(m.message)
-   *     }
-   *   }
-   * }
-   * }}}
-   *
-   * You can call this actor by injecting its `ActorRef` by Play's dependency injection.
-   */
+    * Traceable actor have to extend this trait.
+    *
+    * {{{
+    * class HelloActor @Inject()(val tracer: ZipkinTraceServiceLike) extends TraceableActor {
+    *   def receive = {
+    *     case m: HelloActorMessage => {
+    *       println(m.message)
+    *     }
+    *   }
+    * }
+    * }}}
+    *
+    * You can call this actor by injecting its `ActorRef` by Play's dependency injection.
+    */
   trait TraceableActor extends AroundReceiveOverrideHack {
 
     val tracer: ZipkinTraceServiceLike
 
     implicit var traceData: ActorTraceData = null
+
     implicit def remoteTraceData: RemoteActorTraceData = RemoteActorTraceData(toRemoteSpan(traceData.span, tracer))
 
     override protected def aroundReceiveMessage(receive: Receive, msg: Any): Unit = {
@@ -132,8 +134,8 @@ object ActorTraceSupport {
     }
   }
 
-  class TraceableActorRef(actorRef: ActorRef, tracer: ZipkinTraceServiceLike){
-    def ! (message: Any): Unit = {
+  class TraceableActorRef(actorRef: ActorRef, tracer: ZipkinTraceServiceLike) {
+    def !(message: Any): Unit = {
       actorRef ! message
       message match {
         case m: TraceMessage =>
@@ -145,7 +147,7 @@ object ActorTraceSupport {
       }
     }
 
-    def ? (message: Any)(implicit timeout: Timeout): Future[Any] = {
+    def ?(message: Any)(implicit timeout: Timeout): Future[Any] = {
       val f = actorRef ? message
       message match {
         case m: TraceMessage =>
@@ -176,16 +178,16 @@ object ActorTraceSupport {
   }
 
   /**
-   * Decorate `ActorRef` of [[TraceableActor]].
-   *
-   * {{{
-   * // tell
-   * TraceableActorRef(actorRef) ! message
-   *
-   * // ask
-   * val f: Future[Any] = TraceableActorRef(actorRef) ? message
-   * }}}
-   */
+    * Decorate `ActorRef` of [[TraceableActor]].
+    *
+    * {{{
+    * // tell
+    * TraceableActorRef(actorRef) ! message
+    *
+    * // ask
+    * val f: Future[Any] = TraceableActorRef(actorRef) ? message
+    * }}}
+    */
   object TraceableActorRef {
     def apply(actorRef: ActorRef)(implicit tracer: ZipkinTraceServiceLike): TraceableActorRef = {
       new TraceableActorRef(actorRef, tracer)

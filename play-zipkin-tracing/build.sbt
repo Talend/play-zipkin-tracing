@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   organization := "jp.co.bizreach",
-  version := "2.0.1",
-  scalaVersion := "2.12.4",
+  version := "2.0.1-talend",
+  scalaVersion := "2.11.8",
 //  crossScalaVersions := Seq("2.11.8", "2.12.2"),
   publishMavenStyle := true,
   publishTo := {
@@ -42,12 +42,12 @@ lazy val commonSettings = Seq(
   )
 )
 
-val play26Version = "2.6.10"
+val play26Version = "2.6.6"
 //val play25Version = "2.5.7"
 //val play24Version = "2.4.8"
 //val play23Version = "2.3.10"
 
-val akkaVersion = "2.5.8"
+val akkaVersion = "2.5.4-talend"
 
 lazy val root = (project in file(".")).
   settings(commonSettings: _*).
@@ -59,12 +59,15 @@ lazy val root = (project in file(".")).
 
 lazy val core = (project in file("core")).
   settings(commonSettings: _*).
+  settings(addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full)).
   settings(
     name := "play-zipkin-tracing-core",
     libraryDependencies ++= Seq(
       "commons-lang" % "commons-lang" % "2.6",
       "io.zipkin.brave" % "brave" % "4.12.0",
-      "io.zipkin.reporter2" % "zipkin-sender-okhttp3" % "2.2.0",
+      "io.zipkin.reporter2" % "zipkin-sender-okhttp3" % "2.3.0",
+      "io.zipkin.reporter2" % "zipkin-sender-kafka11" % "2.3.0",
+      "org.scala-lang" % "scala-reflect" % "2.11.8",
       "org.scalatest" %% "scalatest" % "3.0.3" % "test",
       "io.zipkin.brave" % "brave-tests" % "4.12.0" % "test",
       "junit" % "junit" % "4.12" % "test",
@@ -78,6 +81,7 @@ lazy val akka = (project in file("akka")).
   settings(
     name := "play-zipkin-tracing-akka",
     libraryDependencies ++= Seq(
+      "com.typesafe.play" %% "play-json" % play26Version % Provided,
       "com.typesafe.akka" %% "akka-actor" % akkaVersion % Provided
     )
   ).dependsOn(
