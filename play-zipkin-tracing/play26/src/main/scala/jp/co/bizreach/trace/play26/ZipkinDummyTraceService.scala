@@ -1,14 +1,12 @@
 package jp.co.bizreach.trace.play26
 
-import java.util
 import javax.inject.Inject
 
-import brave.{NoopSpan, RealSpan, Tracing}
+import brave.Tracing
 import brave.sampler.Sampler
-import jp.co.bizreach.trace.{TraceData, ZipkinTraceServiceLike}
-import zipkin2.codec.Encoding
-import zipkin2.reporter.{AsyncReporter, Sender}
-import zipkin2.{Call, Callback}
+import jp.co.bizreach.trace.{TraceData, WithReporter, ZipkinTraceServiceLike}
+import zipkin2.Span
+import zipkin2.reporter.{Reporter, Sender}
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
@@ -16,34 +14,14 @@ import scala.util.{Failure, Success, Try}
 /**
   * Dummy trace service implementation.
   */
-class ZipkinDummyTraceService @Inject()(ec: ExecutionContext) extends ZipkinTraceServiceLike {
+class ZipkinDummyTraceService @Inject()(ec: ExecutionContext) extends ZipkinTraceServiceLike with WithReporter {
 
   implicit val executionContext: ExecutionContext = ec
 
   val tracing: Tracing = Tracing
     .newBuilder()
     .localServiceName("unknow")
-    .spanReporter(AsyncReporter.create(new Sender {
-      def encoding: Encoding = Encoding.JSON
-
-      def messageMaxBytes: Int = 5 * 1024 * 1024
-
-      def messageSizeInBytes(encodedSpans: util.List[Array[Byte]]): Int = 2
-
-      def sendSpans(encodedSpans: util.List[Array[Byte]]): Call[Void] = new Call[Void] {
-
-        override def execute: Void = None.orNull
-
-        override def enqueue(delegate: Callback[Void]): Unit = {}
-
-        override def cancel(): Unit = {}
-
-        override def isCanceled: Boolean = true
-
-        override def clone: Call[Void] = this
-
-      }
-    }))
+    .spanReporter(reporter)
     .sampler(Sampler.ALWAYS_SAMPLE)
     .build()
 
@@ -55,6 +33,11 @@ class ZipkinDummyTraceService @Inject()(ec: ExecutionContext) extends ZipkinTrac
     }
   }
 
-  def close(): Unit = {}
+  override lazy val reporter: Reporter[Span] = new Reporter[Span] {
+    override def report(span: Span): Unit = {
+      // Ignore
+    }
+  }
 
+  override val sender: Option[Sender] = None
 }

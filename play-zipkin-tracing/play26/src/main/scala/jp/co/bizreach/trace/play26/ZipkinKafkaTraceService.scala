@@ -5,11 +5,11 @@ import javax.inject.Inject
 import akka.actor.ActorSystem
 import brave.Tracing
 import brave.sampler.Sampler
-import jp.co.bizreach.trace.{ZipkinTraceConfig, ZipkinTraceServiceLike}
+import jp.co.bizreach.trace.{WithReporter, ZipkinTraceConfig, ZipkinTraceServiceLike}
 import play.api.Configuration
 import zipkin2.Span
 import zipkin2.reporter.kafka11.KafkaSender
-import zipkin2.reporter.{AsyncReporter, Reporter}
+import zipkin2.reporter.{AsyncReporter, Reporter, Sender}
 
 import scala.concurrent.ExecutionContext
 
@@ -23,7 +23,7 @@ class ZipkinKafkaTraceService @Inject()
 (
   conf: Configuration,
   actorSystem: ActorSystem
-) extends ZipkinTraceServiceLike {
+) extends ZipkinTraceServiceLike with WithReporter {
 
   implicit val executionContext: ExecutionContext = actorSystem.dispatchers.lookup(ZipkinTraceConfig.AkkaName)
 
@@ -48,8 +48,10 @@ class ZipkinKafkaTraceService @Inject()
       .getOrElse("unknown")
 
   // Defines the kafka reporter
-  lazy val reporter: Reporter[Span] =
-    AsyncReporter.create(
+  override lazy val reporter: Reporter[Span] = AsyncReporter.create(sender.get)
+
+  override lazy val sender: Option[Sender] =
+    Some(
       KafkaSender
         .newBuilder()
         .bootstrapServers(conf.getOptional[String](ZipkinKafkaTraceService.ZipkinBaseUrl).getOrElse(""))
