@@ -6,7 +6,7 @@ version := "1.0-SNAPSHOT"
 
 lazy val root = (project in file(".")).enablePlugins(PlayScala)
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.12.7"
 
 libraryDependencies ++= Seq(
   jdbc,
@@ -15,7 +15,7 @@ libraryDependencies ++= Seq(
   guice
 )
 
-val AkkaVersion = "2.4.11"
+val AkkaVersion = "2.5.17"
 
 // TODO temporary
 resolvers += "Akka Snapshot Repository" at "http://repo.akka.io/snapshots/"
